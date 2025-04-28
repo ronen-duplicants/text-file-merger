@@ -1,10 +1,131 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 import os
 import sys
+import json
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from src.merger.file_merger import FileMerger
+
+class SettingsManager:
+    def __init__(self):
+        self.settings_file = os.path.join(os.path.expanduser("~"), ".text_file_merger_settings.json")
+        self.default_settings = {
+            "ask_to_open_file": True,
+            "last_input_directory": "",
+            "last_output_directory": ""
+        }
+        self.settings = self.load_settings()
+    
+    def load_settings(self):
+        if os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, 'r') as f:
+                    return json.load(f)
+            except Exception:
+                return self.default_settings.copy()
+        return self.default_settings.copy()
+    
+    def save_settings(self):
+        try:
+            with open(self.settings_file, 'w') as f:
+                json.dump(self.settings, f)
+        except Exception as e:
+            print(f"Error saving settings: {e}")
+    
+    def get(self, key):
+        return self.settings.get(key, self.default_settings.get(key))
+    
+    def set(self, key, value):
+        self.settings[key] = value
+        self.save_settings()
+
+class AboutDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("About Text File Merger")
+        
+        # Keep it simple
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        
+        # Add content
+        tk.Label(self, text="Text File Merger", font=("Arial", 16, "bold")).pack(pady=(20, 10))
+        tk.Label(self, text="Version 1.0").pack(pady=5)
+        
+        # Description frame with text
+        desc_frame = tk.Frame(self)
+        desc_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        
+        description = """This tool allows you to merge multiple text files into a single file.
+        
+Features:
+• Merge multiple text files into one output file
+• Clearly mark the start and end of each input file
+• Support for various file types that contain text content
+• User-friendly interface for file selection
+
+Perfect for combining source code, shaders, configuration files, 
+or any text-based content for review or analysis."""
+        
+        desc_text = tk.Text(desc_frame, wrap=tk.WORD, height=10, width=40)
+        desc_text.pack(fill=tk.BOTH, expand=True)
+        desc_text.insert(tk.END, description)
+        desc_text.config(state=tk.DISABLED)
+        
+        # Button frame with padding
+        btn_frame = tk.Frame(self)
+        btn_frame.pack(fill=tk.X, padx=20, pady=(5, 15))
+        
+        # OK button with proper width
+        tk.Button(btn_frame, text="OK", command=self.destroy, width=10).pack(pady=5)
+
+class SettingsDialog(tk.Toplevel):
+    def __init__(self, parent, settings_manager):
+        super().__init__(parent)
+        self.title("Settings")
+        
+        # Keep it simple
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        
+        self.settings_manager = settings_manager
+        
+        # Create variables
+        self.ask_to_open_var = tk.BooleanVar(value=settings_manager.get("ask_to_open_file"))
+        
+        # Create widgets
+        frame = tk.Frame(self, padx=20, pady=20)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        tk.Label(frame, text="File Merger Settings", font=("Arial", 12, "bold")).pack(anchor="w", pady=(0, 10))
+        
+        tk.Checkbutton(frame, text="Ask to open file after merging", variable=self.ask_to_open_var).pack(anchor="w", pady=5)
+        
+        # Clear directory history
+        tk.Button(frame, text="Clear directory history", command=self.clear_directory_history, width=20).pack(anchor="w", pady=5)
+        
+        # Bottom buttons
+        btn_frame = tk.Frame(self)
+        btn_frame.pack(fill=tk.X, padx=20, pady=(5, 15))
+        
+        # Button container to center them
+        button_container = tk.Frame(btn_frame)
+        button_container.pack(pady=5)
+        
+        tk.Button(button_container, text="Save", command=self.save_settings, width=10).pack(side=tk.LEFT, padx=10)
+        tk.Button(button_container, text="Cancel", command=self.destroy, width=10).pack(side=tk.LEFT, padx=10)
+        
+    def save_settings(self):
+        self.settings_manager.set("ask_to_open_file", self.ask_to_open_var.get())
+        self.destroy()
+    
+    def clear_directory_history(self):
+        self.settings_manager.set("last_input_directory", "")
+        self.settings_manager.set("last_output_directory", "")
+        messagebox.showinfo("Directory History", "Directory history has been cleared.")
 
 class FilemergerGUI:
     def __init__(self, root):
@@ -14,8 +135,34 @@ class FilemergerGUI:
         
         self.file_merger = FileMerger()
         self.files_to_merge = []
+        self.settings_manager = SettingsManager()
+        
+        # Create menu bar
+        self.create_menu_bar()
         
         self.create_widgets()
+        
+    def create_menu_bar(self):
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Settings", command=self.open_settings)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.root.destroy)
+        
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.open_about)
+        
+    def open_settings(self):
+        SettingsDialog(self.root, self.settings_manager)
+        
+    def open_about(self):
+        AboutDialog(self.root)
         
     def create_widgets(self):
         # Title
@@ -57,10 +204,21 @@ class FilemergerGUI:
         merge_button.pack(pady=10)
         
     def add_files(self):
-        files = filedialog.askopenfilenames(title="Select files to merge", 
-                                           filetypes=[("Text files", "*.txt"), 
-                                                     ("All files", "*.*")])
+        # Get last used directory for input files
+        initial_dir = self.settings_manager.get("last_input_directory")
+        if not initial_dir or not os.path.exists(initial_dir):
+            initial_dir = os.path.expanduser("~")
+            
+        files = filedialog.askopenfilenames(
+            title="Select files to merge", 
+            initialdir=initial_dir,
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+        
         if files:
+            # Save the last used directory
+            self.settings_manager.set("last_input_directory", os.path.dirname(files[0]))
+            
             for file in files:
                 if file not in self.files_to_merge:
                     self.files_to_merge.append(file)
@@ -82,25 +240,57 @@ class FilemergerGUI:
         if not self.files_to_merge:
             messagebox.showinfo("Info", "Please add files to merge")
             return
+        
+        # Get last used directory for output file
+        initial_dir = self.settings_manager.get("last_output_directory") 
+        if not initial_dir or not os.path.exists(initial_dir):
+            initial_dir = os.path.expanduser("~")
             
-        output_file = filedialog.asksaveasfilename(title="Save merged file as",
-                                                 defaultextension=".txt",
-                                                 filetypes=[("Text files", "*.txt"), 
-                                                           ("All files", "*.*")])
+        output_file = filedialog.asksaveasfilename(
+            title="Save merged file as",
+            initialdir=initial_dir,
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
         
         if output_file:
+            # Save the last used output directory
+            self.settings_manager.set("last_output_directory", os.path.dirname(output_file))
+            
             try:
                 self.file_merger.merge_files(self.files_to_merge, output_file)
                 
-                # Ask if user wants to open the merged file
-                open_file = messagebox.askyesno("Success", 
-                                               f"Files have been merged into {output_file}\n\nDo you want to open the merged file?")
-                
-                if open_file:
-                    self.file_merger.open_file(output_file)
+                # Check if we should ask to open the file
+                if self.settings_manager.get("ask_to_open_file"):
+                    # Use messagebox instead of custom dialog
+                    self.show_open_file_messagebox(output_file)
+                else:
+                    # Just show a confirmation message
+                    messagebox.showinfo("Success", f"Files have been merged into {output_file}")
                     
             except Exception as e:
                 messagebox.showerror("Error", f"An error occurred: {str(e)}")
+
+    def show_open_file_messagebox(self, output_file):
+        """Use built-in messagebox instead of custom dialog"""
+        # Ask if user wants to open the file
+        response = messagebox.askyesno(
+            "Success",
+            f"Files have been merged into:\n{output_file}\n\nDo you want to open the file?"
+        )
+        
+        if response:
+            self.file_merger.open_file(output_file)
+        
+        # Separately ask if they want to stop showing this message
+        dont_ask = messagebox.askyesno(
+            "Preferences",
+            "Would you like to stop showing this dialog in the future?",
+            default=messagebox.NO
+        )
+        
+        if dont_ask:
+            self.settings_manager.set("ask_to_open_file", False)
 
 def run_gui():
     root = tk.Tk()
