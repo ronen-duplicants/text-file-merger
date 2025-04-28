@@ -7,6 +7,35 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from src.merger.file_merger import FileMerger
 
+# Add this utility function at module level for reuse
+def center_window(window, parent):
+    """
+    Centers a window on its parent window.
+    Waits until window is fully rendered before positioning.
+    """
+    # Make sure the window is fully updated
+    window.update_idletasks()
+    
+    # Calculate position
+    parent_width = parent.winfo_width()
+    parent_height = parent.winfo_height()
+    parent_x = parent.winfo_rootx()
+    parent_y = parent.winfo_rooty()
+    
+    window_width = window.winfo_width()
+    window_height = window.winfo_height()
+    
+    # Calculate center position
+    x = parent_x + (parent_width - window_width) // 2
+    y = parent_y + (parent_height - window_height) // 2
+    
+    # Make sure position is on screen
+    x = max(0, x)
+    y = max(0, y)
+    
+    # Set the window position only
+    window.geometry(f"+{x}+{y}")
+
 class SettingsManager:
     def __init__(self):
         self.settings_file = os.path.join(os.path.expanduser("~"), ".text_file_merger_settings.json")
@@ -81,6 +110,10 @@ or any text-based content for review or analysis."""
         
         # OK button with proper width
         tk.Button(btn_frame, text="OK", command=self.destroy, width=10).pack(pady=5)
+        
+        # Center window after all content is added
+        self.minsize(400, 300)  # Set minimum size to prevent tiny dialogs
+        self.after(10, lambda: center_window(self, parent))
 
 class SettingsDialog(tk.Toplevel):
     def __init__(self, parent, settings_manager):
@@ -130,6 +163,10 @@ class SettingsDialog(tk.Toplevel):
         
         tk.Button(button_container, text="Save", command=self.save_settings, width=10).pack(side=tk.LEFT, padx=10)
         tk.Button(button_container, text="Cancel", command=self.destroy, width=10).pack(side=tk.LEFT, padx=10)
+        
+        # Center window after all content is added
+        self.minsize(400, 220)  # Set minimum size
+        self.after(10, lambda: center_window(self, parent))
         
     def save_settings(self):
         self.settings_manager.set("ask_to_open_file", self.ask_to_open_var.get())
@@ -284,6 +321,9 @@ class FilemergerGUI:
 
     def show_open_file_messagebox(self, output_file):
         """Use built-in messagebox instead of custom dialog"""
+        # Position the root window to ensure messageboxes are centered
+        self.root.update_idletasks()
+        
         # Ask if user wants to open the file
         response = messagebox.askyesno(
             "Success",
